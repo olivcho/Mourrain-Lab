@@ -20,7 +20,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-from tkinter import filedialog, Tk
+from tkinter import filedialog, Tk, Label, Entry, Button, IntVar, StringVar, Frame, messagebox
 import os
 
 file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
@@ -30,7 +30,8 @@ df.head()
 output_dir = os.path.join(os.path.dirname(file_path), 'Summary')
 os.makedirs(output_dir, exist_ok=True)
 
-
+y_figsize = 15
+x_figsize = 12.5
 
 vprawData = pd.DataFrame(np.zeros((len(df), 15)))
 
@@ -78,14 +79,62 @@ vprawData = vprawData[(vprawData['start'] == vprawData['start'].round()) &
                       (vprawData['start'] != vprawData['end'])]
 after_filter = len(vprawData)
 
+def collect_inputs():
+    global needTotalBoxBool, treatmentBool, removeTransBool, binWidth, sleepwakeMatrixBool, sleepBoutBool, removeBool
 
-needTotalBoxBool = int(input("Do you want TotalBoxPlots (1 is yes): "))
-treatmentBool = int(input("Do you want to remove any timepoints due to treatment? (1 is yes): "))
-removeTransBool = int(input("Do you want to remove the Day/Night transition minute? (1 is yes): "))
-binWidth = int(input("Set time window Bin width (min): "))
-sleepwakeMatrixBool = int(input("Do you want a sleep/wake matrix? (1 is yes): "))
-sleepBoutBool = int(input("Do you want a sleep bout duration matrix? (1 is yes): "))
-removeBool = int(input("Do you want to exclude any wells? (1 is yes): "))
+    try:
+        needTotalBoxBool = needTotalBoxBool_var.get()
+        treatmentBool = treatmentBool_var.get()
+        removeTransBool = removeTransBool_var.get()
+        binWidth = int(binWidth_var.get())
+        sleepwakeMatrixBool = sleepwakeMatrix_var.get()
+        sleepBoutBool = sleepBout_var.get()
+        removeBool = removeBool_var.get()
+        
+        root.quit()
+        root.destroy()
+    except ValueError:
+        messagebox.showerror("Invalid Input", "Please enter valid inputs.")
+        return
+
+root = Tk()
+root.title("Data Analysis Input")
+
+needTotalBoxBool_var = IntVar(value=1)
+treatmentBool_var = IntVar(value=0)
+removeTransBool_var = IntVar(value=1)
+binWidth_var = StringVar(value=10)
+sleepwakeMatrix_var = IntVar(value=1)
+sleepBout_var = IntVar(value=1)
+removeBool_var = IntVar(value=0)
+
+frame = Frame(root)
+frame.pack(pady=20)
+
+Label(frame, text="Do you want TotalBoxPlots (1 is yes): ").grid(row=0, column=0, sticky='w')
+Entry(frame, textvariable=needTotalBoxBool_var).grid(row=0, column=1)
+
+Label(frame, text="Do you want to remove any timepoints due to treatment? (1 is yes): ").grid(row=1, column=0, sticky='w')
+Entry(frame, textvariable=treatmentBool_var).grid(row=1, column=1)
+
+Label(frame, text="Do you want to remove the Day/Night transition minute? (1 is yes): ").grid(row=2, column=0, sticky='w')
+Entry(frame, textvariable=removeTransBool_var).grid(row=2, column=1)
+
+Label(frame, text="Set time window Bin width (min): ").grid(row=3, column=0, sticky='w')
+Entry(frame, textvariable=binWidth_var).grid(row=3, column=1)
+
+Label(frame, text="Do you want a sleep/wake matrix? (1 is yes): ").grid(row=4, column=0, sticky='w')
+Entry(frame, textvariable=sleepwakeMatrix_var).grid(row=4, column=1)
+
+Label(frame, text="Do you want a sleep bout duration matrix? (1 is yes): ").grid(row=5, column=0, sticky='w')
+Entry(frame, textvariable=sleepBout_var).grid(row=5, column=1)
+
+Label(frame, text="Do you want to exclude any wells? (1 is yes): ").grid(row=6, column=0, sticky='w')
+Entry(frame, textvariable=removeBool_var).grid(row=6, column=1)
+
+Button(frame, text="Submit", command=collect_inputs).grid(row=7, columnspan=2, pady=10)
+
+root.mainloop()
 
 num_animals = int(vprawData['animalNum'].max())
 noofBins = len(vprawData[vprawData['animalNum'] == 1]) // binWidth
@@ -125,9 +174,6 @@ for animalIdx in range(1, num_animals + 1):
         vpMeasure[binIdx, 1, animalIdx - 1] = animal_data.iloc[binRange]['midDuration'].sum()
         vpMeasure[binIdx, 2, animalIdx - 1] = (animal_data.iloc[binRange]['midDuration'] == 0).sum()
 
-y_figsize = 10
-x_figsize = 5
-
 if needTotalBoxBool:
     y_min = np.min(vpMeasure[:, 1, :])
     y_max = np.max(vpMeasure[:, 1, :])
@@ -157,12 +203,11 @@ if needTotalBoxBool:
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(os.path.join(output_dir, 'activity_plots_all_animals.png'))
-    plt.show()
 
 if sleepwakeMatrixBool:
    y_min = np.min(vpMeasure[:, 2, :])
    y_max = np.max(vpMeasure[:, 2, :])
-
+   
    fig, axs = plt.subplots(4, 6, figsize=(y_figsize, x_figsize))
    fig.suptitle('', fontsize=16) # Include title if necessary
 
@@ -188,7 +233,6 @@ if sleepwakeMatrixBool:
 
    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
    plt.savefig(os.path.join(output_dir, 'sleep_plots_all_animals.png'))
-   plt.show()
 
 
 
@@ -203,10 +247,6 @@ for animalIdx in range(num_animals):
         vpSleepBout[binIdx, 0, animalIdx - 1] = animal_data.iloc[binIdx]['startTime']
         vpSleepBout[binIdx, 1, animalIdx - 1] = animal_data.iloc[binIdx]['freezeCount']
         vpSleepBout[binIdx, 2, animalIdx - 1] = animal_data.iloc[binIdx]['freezeDuration']
-
-        # Defining "sleep bout"
-        # 1 if freezeDuration.round() = 60 & freezeCount = 0
-        # else 0
 
         if animal_data.iloc[binIdx]['freezeDuration'].round() == 60 and animal_data.iloc[binIdx]['freezeCount'] == 0:
             vpSleepBout[binIdx, 3, animalIdx - 1] = 1
@@ -232,7 +272,7 @@ if sleepBoutBool:
         
       axs[i].set_ylabel('')
       if i % 6 == 0:
-         axs[i].set_ylabel('Sleep Bout (sleep bout/min)')
+         axs[i].set_ylabel('Sleep Bouts')
 
       axs[i].set_yticks([])
       axs[i].set_xticks([])
@@ -246,7 +286,6 @@ if sleepBoutBool:
 
    plt.tight_layout(rect=[0, 0, 1, 1])
    plt.savefig(os.path.join(output_dir, 'sleep_bouts_all_animals.png'))
-   plt.show()
 
 if sleepBoutBool:    
     sleep_bout_counts = []
@@ -290,7 +329,6 @@ if sleepBoutBool:
 
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'sleep_bouts_statistics_all_animals.png'))
-    plt.show()
 
 if sleepBoutBool:
     y_min = 0
@@ -324,12 +362,11 @@ if sleepBoutBool:
 
     plt.tight_layout(rect=[0, 0, 1, 1])
     plt.savefig(os.path.join(output_dir, 'sleep_plots_overlayed_all_animals.png'))
-    plt.show()
 
 if sleepBoutBool:
    y_min = 0
-   y_max = np.max(vpMeasure[:, 1, :])
-
+   y_max = 1
+   
    fig, axs = plt.subplots(8, 3, figsize=(y_figsize, x_figsize))
    fig.suptitle('', fontsize=16)
 
@@ -340,7 +377,7 @@ if sleepBoutBool:
             vpSleepBout[:, 3, i], 
             color='darkblue', width=0.2, edgecolor='darkblue')
       
-      axs[i].plot(vpMeasure[:, 0, i], vpMeasure[:, 1, i] / y_max, color='red')
+      axs[i].plot(vpMeasure[:, 0, i], vpMeasure[:, 1, i] / np.max(vpMeasure[:, 1, :]), color='red')
 
       axs[i].grid(False)
         
@@ -360,6 +397,7 @@ if sleepBoutBool:
 
    plt.tight_layout(rect=[0, 0, 1, 1])
    plt.savefig(os.path.join(output_dir, 'sleep_activity_overlayed_all_animals.png'))
-   plt.show()
+
+plt.show()
 
 print("Script Complete!")

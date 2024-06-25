@@ -1,0 +1,365 @@
+'''
+Mourrain Lab - Department of Psychiatry & Behavioral Sciences, Stanford University
+
+Author: Oliver Cho (olivercho007@gmail.com)
+Affiliation: The Nueva School, Class of 2025
+Date: June 2024
+
+This script automates data analysis for ViewPoint .xlsx files.
+The original code for this script was written by Louis Leung, Ph.D. in MATLAB.
+Code was rewritten in Python for speed and readability + added new features to analyze sleep bouts.
+
+--------------------------------------------
+
+Dependencies: Pandas, NumPy, Matplotlib, Datetime, tkinter, OS.
+
+If you do not have the dependencies installed, open your command prompt/terminal and type in "pip install [package]"
+'''
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from tkinter import filedialog, Tk
+import os
+
+file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+df = pd.read_excel(file_path)
+df.head()
+
+output_dir = os.path.join(os.path.dirname(file_path), 'Summary')
+os.makedirs(output_dir, exist_ok=True)
+
+
+
+vprawData = pd.DataFrame(np.zeros((len(df), 15)))
+
+startDate = df.iloc[:, 27]
+vprawData[0] = startDate
+
+startTime = df.iloc[:, 28]
+
+startTime = pd.to_datetime(startTime, format='%H:%M:%S').dt.time
+def total_minutes_elapsed(time):
+    base_time = datetime.strptime('18:00:00', '%H:%M:%S').time()
+    delta = timedelta(hours=time.hour, minutes=time.minute, seconds=time.second) - timedelta(hours=base_time.hour, minutes=base_time.minute, seconds=base_time.second)
+    return delta.seconds // 60
+vprawData[1] = startTime.apply(total_minutes_elapsed)
+
+daynightIdx = (vprawData.iloc[:,1] > 300) & (vprawData.iloc[:,1] < 900) # midnight labeled with True
+vprawData[2] = daynightIdx
+    
+vprawData.iloc[:, 3:5] = df.iloc[:, 14:16].to_numpy()
+    
+animalNum = df.iloc[:, 1].str.extract(r'z(\d+)').astype(float).to_numpy().flatten()
+vprawData.iloc[:, 5] = animalNum
+    
+vprawData.iloc[:, 6:15] = df.iloc[:, 18:27].to_numpy()
+
+vprawData = vprawData.rename(columns={0: 'startDate',
+                                      1: 'startTime',
+                                      2: 'night',
+                                      3: 'start',
+                                      4: 'end',
+                                      5: 'animalNum',
+                                      6: 'freezeCount',
+                                      7: 'freezeDuration',
+                                      8: 'midCount',
+                                      9: 'midDuration',
+                                      10: 'burstCount',
+                                      11: 'burstDuration',
+                                      12: 'zeroCount',
+                                      13: 'zeroDuration',
+                                      14: 'activityIntegral'})
+
+before_filter = len(vprawData)
+vprawData = vprawData[(vprawData['start'] == vprawData['start'].round()) &
+                      (vprawData['end'] == vprawData['end'].round()) &
+                      (vprawData['start'] != vprawData['end'])]
+after_filter = len(vprawData)
+
+
+needTotalBoxBool = int(input("Do you want TotalBoxPlots (1 is yes): "))
+treatmentBool = int(input("Do you want to remove any timepoints due to treatment? (1 is yes): "))
+removeTransBool = int(input("Do you want to remove the Day/Night transition minute? (1 is yes): "))
+binWidth = int(input("Set time window Bin width (min): "))
+sleepwakeMatrixBool = int(input("Do you want a sleep/wake matrix? (1 is yes): "))
+sleepBoutBool = int(input("Do you want a sleep bout duration matrix? (1 is yes): "))
+removeBool = int(input("Do you want to exclude any wells? (1 is yes): "))
+
+num_animals = int(vprawData['animalNum'].max())
+noofBins = len(vprawData[vprawData['animalNum'] == 1]) // binWidth
+
+# Remove measurements taken during heatshock or adding drugs
+if treatmentBool:
+    startTreat = int(input("Treatment Started: "))
+    endTreat = int(input("Treatment Ended: "))
+    vprawData.loc[startTreat:endTreat*num_animals, 'freezeCount':'activityIntegral'] = np.nan
+
+# Exclude the minute bin when the light turns on and off
+if removeTransBool:
+    vprawData.loc[vprawData['startTime'] == 300, 'freezeCount':'activityIntegral'] = np.nan
+    vprawData.loc[vprawData['startTime'] == 900, 'freezeCount':'activityIntegral'] = np.nan
+
+# Remove any fish that didn't survive the experiment
+if removeBool:
+    deleteWells = input("Enter space-separated numbers of wells to exclude: ")
+    deleteWells = list(map(int, deleteWells.split()))
+    for well in deleteWells:
+        vprawData.loc[vprawData['animalNum'] == well, 'freezeCount':'activityIntegral'] = np.nan
+
+vprawData.sort_values(['animalNum', 'startTime'], ignore_index=True, inplace=True)
+vprawData.insert(0, 'animalNum', vprawData.pop('animalNum'))
+
+vpMeasure = np.zeros((noofBins, 3, num_animals))
+
+for animalIdx in range(1, num_animals + 1):
+
+    animal_data = vprawData[vprawData['animalNum'] == animalIdx]
+
+    noofBins = len(animal_data) // binWidth
+
+    for binIdx in range(noofBins):
+        binRange = slice(binIdx * binWidth, (binIdx + 1) * binWidth)
+        vpMeasure[binIdx, 0, animalIdx - 1] = animal_data.iloc[binRange]['startTime'].iloc[0]
+        vpMeasure[binIdx, 1, animalIdx - 1] = animal_data.iloc[binRange]['midDuration'].sum()
+        vpMeasure[binIdx, 2, animalIdx - 1] = (animal_data.iloc[binRange]['midDuration'] == 0).sum()
+
+y_figsize = 10
+x_figsize = 5
+
+if needTotalBoxBool:
+    y_min = np.min(vpMeasure[:, 1, :])
+    y_max = np.max(vpMeasure[:, 1, :])
+
+    fig, axs = plt.subplots(4, 6, figsize=(y_figsize, x_figsize))
+    fig.suptitle('', fontsize=16) # Include title if necessary
+
+    axs = axs.flatten()
+
+    for i in range(num_animals):
+        axs[i].plot(vpMeasure[:, 0, i], vpMeasure[:, 1, i], color='darkblue')
+        axs[i].grid(False)
+        
+        axs[i].set_ylabel('')
+        if i % 6 == 0:
+            axs[i].set_ylabel('Abs Activity (sec/10min)', fontsize=14)
+
+        axs[i].set_ylim(y_min, y_max)
+        axs[i].set_xticks([])
+        axs[i].set_xlabel(f'Well {i + 1}', fontsize=14)
+
+        axs[i].annotate('', xy=(300, y_max - (y_max - y_min)*0.05), xytext=(300, y_max),
+                        arrowprops=dict(facecolor='black', shrink=0, width=3, headwidth=12))
+        
+        axs[i].annotate('', xy=(900, y_max - (y_max - y_min)*0.05), xytext=(900, y_max),
+                        arrowprops=dict(facecolor='white', edgecolor='black', shrink=0, width=3, headwidth=12))
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(os.path.join(output_dir, 'activity_plots_all_animals.png'))
+    plt.show()
+
+if sleepwakeMatrixBool:
+   y_min = np.min(vpMeasure[:, 2, :])
+   y_max = np.max(vpMeasure[:, 2, :])
+
+   fig, axs = plt.subplots(4, 6, figsize=(y_figsize, x_figsize))
+   fig.suptitle('', fontsize=16) # Include title if necessary
+
+   axs = axs.flatten()
+
+   for i in range(num_animals):
+      axs[i].plot(vpMeasure[:, 0, i], vpMeasure[:, 2, i], color='darkred')
+      axs[i].grid(False)
+        
+      axs[i].set_ylabel('')
+      if i % 6 == 0:
+         axs[i].set_ylabel('Abs Sleep (min/10min)', fontsize=14)
+
+      axs[i].set_ylim(y_min, y_max)
+      axs[i].set_xticks([])
+      axs[i].set_xlabel(f'Well {i + 1}', fontsize=14)
+
+      axs[i].annotate('', xy=(300, y_max - (y_max - y_min)*0.05), xytext=(300, y_max),
+                        arrowprops=dict(facecolor='black', shrink=0, width=3, headwidth=12))
+        
+      axs[i].annotate('', xy=(900, y_max - (y_max - y_min)*0.05), xytext=(900, y_max),
+                        arrowprops=dict(facecolor='white', edgecolor='black', shrink=0, width=3, headwidth=12))
+
+   plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+   plt.savefig(os.path.join(output_dir, 'sleep_plots_all_animals.png'))
+   plt.show()
+
+
+
+noofMin = len(vprawData[vprawData['animalNum'] == 1])
+vpSleepBout = np.zeros((noofMin, 4, num_animals))
+
+for animalIdx in range(num_animals):
+
+    animal_data = vprawData[vprawData['animalNum'] == animalIdx+1]
+
+    for binIdx in range(noofMin):
+        vpSleepBout[binIdx, 0, animalIdx - 1] = animal_data.iloc[binIdx]['startTime']
+        vpSleepBout[binIdx, 1, animalIdx - 1] = animal_data.iloc[binIdx]['freezeCount']
+        vpSleepBout[binIdx, 2, animalIdx - 1] = animal_data.iloc[binIdx]['freezeDuration']
+
+        # Defining "sleep bout"
+        # 1 if freezeDuration.round() = 60 & freezeCount = 0
+        # else 0
+
+        if animal_data.iloc[binIdx]['freezeDuration'].round() == 60 and animal_data.iloc[binIdx]['freezeCount'] == 0:
+            vpSleepBout[binIdx, 3, animalIdx - 1] = 1
+        else:
+            vpSleepBout[binIdx, 3, animalIdx - 1] = 0
+
+
+if sleepBoutBool:
+   y_min = 0
+   y_max = 1  
+
+   fig, axs = plt.subplots(8, 3, figsize=(y_figsize, x_figsize))
+   fig.suptitle('', fontsize=16)
+
+   axs = axs.flatten()
+
+   for i in range(num_animals):
+      axs[i].bar(np.arange(len(vpSleepBout[:, 0, i])), 
+            vpSleepBout[:, 3, i], 
+            color='darkblue', width=0.2, edgecolor='darkblue')
+      
+      axs[i].grid(False)
+        
+      axs[i].set_ylabel('')
+      if i % 6 == 0:
+         axs[i].set_ylabel('Sleep Bout (sleep bout/min)')
+
+      axs[i].set_yticks([])
+      axs[i].set_xticks([])
+      axs[i].set_xlabel(f'Well {i + 1}', fontsize=16)
+
+      axs[i].annotate('', xy=(300, y_max), xytext=(300, y_max+(y_max - y_min)*0.025),
+                        arrowprops=dict(facecolor='black', shrink=0, width=3, headwidth=12))
+        
+      axs[i].annotate('', xy=(900, y_max), xytext=(900, y_max+(y_max - y_min)*0.025),
+                        arrowprops=dict(facecolor='white', edgecolor='black', shrink=0, width=3, headwidth=12))
+
+   plt.tight_layout(rect=[0, 0, 1, 1])
+   plt.savefig(os.path.join(output_dir, 'sleep_bouts_all_animals.png'))
+   plt.show()
+
+if sleepBoutBool:    
+    sleep_bout_counts = []
+
+    for animalIdx in range(num_animals):
+        sleep_bouts_count = 0
+        total_sleep_time = 0
+        is_sleep_bout = False
+        current_bout_start = 0
+        
+        for binIdx in range(len(vpSleepBout)):
+            if vpSleepBout[binIdx, 3, animalIdx] == 1:
+                if is_sleep_bout == False:
+                    sleep_bouts_count += 1
+                    is_sleep_bout = True
+                total_sleep_time += 1
+            else:
+                if is_sleep_bout == True:
+                    is_sleep_bout = False
+        
+        sleep_bout_counts.append({
+            'Fish ID': animalIdx + 1,
+            'Sleep Bouts': sleep_bouts_count,
+            'Total Sleep Time (min)': total_sleep_time
+        })
+
+    sleep_bouts_df = pd.DataFrame(sleep_bout_counts)
+
+    y_min = 0
+    y_max = np.max(sleep_bouts_df['Total Sleep Time (min)'])
+
+    plt.figure(figsize=(6, 4))
+    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Total Sleep Time (min)'], color='darkblue')
+    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Sleep Bouts'], color='red')
+    plt.ylim(y_min, y_max + 300)
+
+    plt.xlabel('Fish ID')
+    plt.ylabel('Total Time (minutes)/Frequency', fontsize=7)
+    plt.title('Total length of Sleep Bouts + # of Sleep Bouts by Fish/Well', fontsize=10)
+    plt.legend(['Total Sleep Time (minutes)', 'Number of Sleep Bouts'])
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, 'sleep_bouts_statistics_all_animals.png'))
+    plt.show()
+
+if sleepBoutBool:
+    y_min = 0
+    y_max = 1
+    
+    fig, axs = plt.subplots(8, 3, figsize=(y_figsize, x_figsize))
+    fig.suptitle('', fontsize=16)
+    
+    axs = axs.flatten()
+    
+    for i in range(num_animals):
+        axs[i].bar(np.arange(len(vpSleepBout[:, 0, i])), 
+            vpSleepBout[:, 3, i], 
+            color='darkblue', width=0.2, edgecolor='darkblue')
+        
+        axs[i].plot(vpMeasure[:, 0, i], vpMeasure[:, 2, i] / 10, color='red', label='Abs Sleep (min/10min)')
+        axs[i].grid(False)
+        axs[i].set_ylabel('')
+        if i % 6 == 0:
+            axs[i].set_ylabel('Sleep Bout (sleep bout/min)')
+            
+        axs[i].set_yticks([])
+        axs[i].set_xticks([])
+        axs[i].set_xlabel(f'Well {i + 1}', fontsize=16)
+
+        axs[i].annotate('', xy=(300, y_max), xytext=(300, y_max+(y_max - y_min)*0.025),
+                        arrowprops=dict(facecolor='black', shrink=0, width=3, headwidth=12))
+        
+        axs[i].annotate('', xy=(900, y_max), xytext=(900, y_max+(y_max - y_min)*0.025),
+                        arrowprops=dict(facecolor='white', edgecolor='black', shrink=0, width=3, headwidth=12))
+
+    plt.tight_layout(rect=[0, 0, 1, 1])
+    plt.savefig(os.path.join(output_dir, 'sleep_plots_overlayed_all_animals.png'))
+    plt.show()
+
+if sleepBoutBool:
+   y_min = 0
+   y_max = np.max(vpMeasure[:, 1, :])
+
+   fig, axs = plt.subplots(8, 3, figsize=(y_figsize, x_figsize))
+   fig.suptitle('', fontsize=16)
+
+   axs = axs.flatten()
+
+   for i in range(num_animals):
+      axs[i].bar(np.arange(len(vpSleepBout[:, 0, i])), 
+            vpSleepBout[:, 3, i], 
+            color='darkblue', width=0.2, edgecolor='darkblue')
+      
+      axs[i].plot(vpMeasure[:, 0, i], vpMeasure[:, 1, i] / y_max, color='red')
+
+      axs[i].grid(False)
+        
+      axs[i].set_ylabel('')
+      if i % 6 == 0:
+         axs[i].set_ylabel('Sleep Bout (sleep bout/min)')
+
+      axs[i].set_yticks([])
+      axs[i].set_xticks([])
+      axs[i].set_xlabel(f'Well {i + 1}', fontsize=16)
+
+      axs[i].annotate('', xy=(300, y_max), xytext=(300, y_max+(y_max - y_min)*0.025),
+                        arrowprops=dict(facecolor='black', shrink=0, width=3, headwidth=12))
+        
+      axs[i].annotate('', xy=(900, y_max), xytext=(900, y_max+(y_max - y_min)*0.025),
+                        arrowprops=dict(facecolor='white', edgecolor='black', shrink=0, width=3, headwidth=12))
+
+   plt.tight_layout(rect=[0, 0, 1, 1])
+   plt.savefig(os.path.join(output_dir, 'sleep_activity_overlayed_all_animals.png'))
+   plt.show()
+
+print("Script Complete!")

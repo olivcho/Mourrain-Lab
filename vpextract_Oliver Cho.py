@@ -377,30 +377,15 @@ if sleepBoutBool:
     y_min = 0
     y_max = np.max(sleep_bouts_df['Total Average (min)'])
 
-    # Create the figure and axis
     plt.figure(figsize=(6, 4))
     plt.suptitle('Average Sleep Bout Chart', fontsize=16)
-
-    # Plot Total Average
     plt.stem(sleep_bouts_df['Fish ID'], sleep_bouts_df['Total Average (min)'], linefmt='darkblue', markerfmt='o', basefmt=' ')
-
-    # Plot Night Average
     plt.stem(sleep_bouts_df['Fish ID'], sleep_bouts_df['Night Average (min)'], linefmt='darkgreen', markerfmt='o', basefmt=' ')
-
-    # Plot Day Average
     plt.stem(sleep_bouts_df['Fish ID'], sleep_bouts_df['Day Average (min)'], linefmt='darkred', markerfmt='o', basefmt=' ')
-
-    # Set y-limits
     plt.ylim(y_min, y_max + 2)
-
-    # Label axes
     plt.xlabel('Fish ID')
     plt.ylabel('Average Sleep Bout Length (min)', fontsize=7)
-
-    # Add legend
     plt.legend(['Total Average', 'Night Average', 'Day Average'])
-
-    # Adjust layout and save figure
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.savefig(os.path.join(output_dir, 'average_sleep_bout_statistics.png'))
 

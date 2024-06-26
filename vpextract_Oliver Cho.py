@@ -11,9 +11,9 @@ Code was rewritten in Python for speed and readability + added new features to a
 
 --------------------------------------------
 
-Dependencies: Pandas, NumPy, Matplotlib, Datetime, tkinter, OS.
+Requirements: Pandas, NumPy, Matplotlib, Datetime, tkinter, OS.
 
-If you do not have the dependencies installed, open your command prompt/terminal and type in "pip install [package]"
+If you do not have the requirements installed, open your command prompt/terminal and type in "pip install [package]"
 '''
 
 import pandas as pd

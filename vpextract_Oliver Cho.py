@@ -144,7 +144,8 @@ num_animals = int(vprawData['animalNum'].max())
 noofBins = len(vprawData[vprawData['animalNum'] == 1]) // binWidth
 
 # Remove measurements taken during heatshock or adding drugs
-vprawData.loc[startTreat:endTreat*num_animals, 'freezeCount':'activityIntegral'] = np.nan
+if startTreat or endTreat != 0:
+    vprawData.loc[startTreat:endTreat*num_animals, 'freezeCount':'activityIntegral'] = np.nan
 
 # Exclude the minute bin when the light turns on and off
 if removeTransBool == 1:
@@ -160,6 +161,11 @@ for well in deleteWells:
 vprawData.sort_values(['animalNum', 'startTime'], ignore_index=True, inplace=True)
 vprawData.insert(0, 'animalNum', vprawData.pop('animalNum'))
 
+vprawData.to_excel(os.path.join(output_dir, 'vprawData.xlsx'), index=False)
+print(f"vprawData saved to {os.path.join(output_dir)}")
+
+
+
 vpMeasure = np.zeros((noofBins, 3, num_animals))
 
 for animalIdx in range(num_animals):
@@ -173,6 +179,8 @@ for animalIdx in range(num_animals):
         vpMeasure[binIdx, 0, animalIdx] = animal_data.iloc[binRange]['startTime'].iloc[0]
         vpMeasure[binIdx, 1, animalIdx] = animal_data.iloc[binRange]['midDuration'].sum()
         vpMeasure[binIdx, 2, animalIdx] = (animal_data.iloc[binRange]['midDuration'] == 0).sum()
+
+
 
 if needTotalBoxBool:
     fig, axs = plt.subplots(4, 6, figsize=(y_figsize, x_figsize))
@@ -250,7 +258,6 @@ for animalIdx in range(num_animals):
         else:
             vpSleepBout[binIdx, 3, animalIdx] = 0
 
-
 if sleepBoutBool:
 
    fig, axs = plt.subplots(8, 3, figsize=(y_figsize, x_figsize))
@@ -282,33 +289,73 @@ if sleepBoutBool:
    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
    plt.savefig(os.path.join(output_dir, 'sleep_bout_plot.png'))
 
+# Downloading data
+data = []
+for animalIdx in range(num_animals):
+    for binIdx in range(noofMin):
+        row = [
+            animalIdx + 1,
+            vpSleepBout[binIdx, 0, animalIdx], 
+            vpSleepBout[binIdx, 1, animalIdx],
+            vpSleepBout[binIdx, 2, animalIdx],
+            vpSleepBout[binIdx, 3, animalIdx]
+        ]
+        data.append(row)
+
+columns = ['animalIdx', 'startTime', 'freezeCount', 'freezeDuration', 'isSleepBout']
+vpSleepBout_df = pd.DataFrame(data, columns=columns)
+vpSleepBout_df.to_excel(os.path.join(output_dir, 'vpSleepBoutData.xlsx'), index=False)
+print(f"vpSleepBoutData saved to {os.path.join(output_dir)}")
 
 if sleepBoutBool:    
     sleep_bout_counts = []
 
     for animalIdx in range(num_animals):
-        sleep_bouts_count = 0
+        total_sleep_bout_count = 0
         total_sleep_time = 0
+        day_sleep_bout_count = 0
+        day_sleep_time = 0
+        night_sleep_bout_count = 0
+        night_sleep_time = 0
         is_sleep_bout = False
-        current_bout_start = 0
-        
+
         for binIdx in range(len(vpSleepBout)):
+            is_day = binIdx < 300 or binIdx >= 900
+            is_night = 300 <= binIdx < 900
+
             if vpSleepBout[binIdx, 3, animalIdx] == 1:
-                if is_sleep_bout == False:
-                    sleep_bouts_count += 1
+                if not is_sleep_bout:
+                    total_sleep_bout_count += 1
                     is_sleep_bout = True
+                    if is_day:
+                        day_sleep_bout_count += 1
+                    elif is_night:
+                        night_sleep_bout_count += 1
                 total_sleep_time += 1
+                if is_day:
+                    day_sleep_time += 1
+                elif is_night:
+                    night_sleep_time += 1
             else:
-                if is_sleep_bout == True:
+                if is_sleep_bout:
                     is_sleep_bout = False
         
         sleep_bout_counts.append({
             'Fish ID': animalIdx + 1,
-            'Sleep Bouts': sleep_bouts_count,
-            'Total Sleep Time (min)': total_sleep_time
+            'Day Sleep Bouts': day_sleep_bout_count, 
+            'Day Sleep Time (min)': day_sleep_time,
+            'Night Sleep Bouts': night_sleep_bout_count,
+            'Night Sleep Time (min)': night_sleep_time,
+            'Total Sleep Bouts': total_sleep_bout_count,
+            'Total Sleep Time (min)': total_sleep_time,
+            'Day Average (min)': day_sleep_time / day_sleep_bout_count if day_sleep_bout_count else 0, 
+            'Night Average (min)': night_sleep_time / night_sleep_bout_count if night_sleep_bout_count else 0,
+            'Total Average (min)': total_sleep_time / total_sleep_bout_count if total_sleep_bout_count else 0
         })
 
     sleep_bouts_df = pd.DataFrame(sleep_bout_counts)
+    sleep_bouts_df.to_excel(os.path.join(output_dir, 'vpSleepBoutTotalData.xlsx'), index=False)
+    print(f"vpSleepBoutTotalData saved to {os.path.join(output_dir)}")
 
     y_min = 0
     y_max = np.max(sleep_bouts_df['Total Sleep Time (min)'])
@@ -316,7 +363,7 @@ if sleepBoutBool:
     plt.figure(figsize=(6, 4))
     plt.suptitle('Sleep Bout Bar Chart', fontsize=16)
     plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Total Sleep Time (min)'], color='darkblue')
-    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Sleep Bouts'], color='red')
+    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Total Sleep Bouts'], color='red')
     plt.ylim(y_min, y_max + 300)
 
     plt.xlabel('Fish ID')
@@ -325,7 +372,54 @@ if sleepBoutBool:
     plt.legend(['Total Sleep Time (minutes)', 'Number of Sleep Bouts'])
 
     plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.savefig(os.path.join(output_dir, 'sleep_bout_statistics.png'))
+    plt.savefig(os.path.join(output_dir, 'total_sleep_bout_statistics.png'))
+
+    y_min = 0
+    y_max = np.max(sleep_bouts_df['Total Average (min)'])
+
+    # Create the figure and axis
+    plt.figure(figsize=(6, 4))
+    plt.suptitle('Average Sleep Bout Chart', fontsize=16)
+
+    # Plot Total Average
+    plt.stem(sleep_bouts_df['Fish ID'], sleep_bouts_df['Total Average (min)'], linefmt='darkblue', markerfmt='o', basefmt=' ')
+
+    # Plot Night Average
+    plt.stem(sleep_bouts_df['Fish ID'], sleep_bouts_df['Night Average (min)'], linefmt='darkgreen', markerfmt='o', basefmt=' ')
+
+    # Plot Day Average
+    plt.stem(sleep_bouts_df['Fish ID'], sleep_bouts_df['Day Average (min)'], linefmt='darkred', markerfmt='o', basefmt=' ')
+
+    # Set y-limits
+    plt.ylim(y_min, y_max + 2)
+
+    # Label axes
+    plt.xlabel('Fish ID')
+    plt.ylabel('Average Sleep Bout Length (min)', fontsize=7)
+
+    # Add legend
+    plt.legend(['Total Average', 'Night Average', 'Day Average'])
+
+    # Adjust layout and save figure
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(os.path.join(output_dir, 'average_sleep_bout_statistics.png'))
+
+'''    y_min = 0
+    y_max = np.max(sleep_bouts_df['Total Average (min)'])
+
+    plt.figure(figsize=(6, 4))
+    plt.suptitle('Average Sleep Bout Bar Chart', fontsize=16)
+    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Total Average (min)'], color='darkblue')
+    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Night Average (min)'], color='darkgreen')
+    plt.bar(sleep_bouts_df['Fish ID'], sleep_bouts_df['Day Average (min)'], color='darkred')
+    plt.ylim(y_min, y_max + 2)
+
+    plt.xlabel('Fish ID')
+    plt.ylabel('Average Sleep Bout Length (min)', fontsize=7)
+    plt.legend(['Total Average', 'Night Average', 'Day Average'])
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.savefig(os.path.join(output_dir, 'average_sleep_bout_statistics.png'))'''
 
 if sleepBoutBool:
     

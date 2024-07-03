@@ -198,7 +198,8 @@ if needTotalBoxBool:
 
         axs[i].set_ylim(0, 150)
         axs[i].set_yticks([0, 50, 100, 150])
-        axs[i].set_xticks([])
+        axs[i].set_xticks([0, 1440])
+        axs[i].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
         axs[i].set_xlabel(f'Well {i + 1}', fontsize=14)
 
         axs[i].annotate('', xy=(300, 145), xytext=(300, 150),
@@ -227,7 +228,8 @@ if sleepwakeMatrixBool:
 
       axs[i].set_ylim(0, 10)
       axs[i].set_yticks([0, 2, 4, 6, 8, 10])
-      axs[i].set_xticks([])
+      axs[i].set_xticks([0, 1440])
+      axs[i].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
       axs[i].set_xlabel(f'Well {i + 1}', fontsize=14)
 
       axs[i].annotate('', xy=(300, 9.5), xytext=(300, 10),
@@ -277,7 +279,8 @@ if sleepBoutBool:
          axs[i].set_ylabel('Sleep Bouts')
 
       axs[i].set_yticks([])
-      axs[i].set_xticks([])
+      axs[i].set_xticks([0, 1440])
+      axs[i].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
       axs[i].set_xlabel(f'Well {i + 1}', fontsize=16)
 
       axs[i].annotate('', xy=(300, 1), xytext=(300, 1.025),
@@ -425,7 +428,8 @@ if sleepBoutBool:
             axs[i].set_ylabel('Sleep Bout (sleep bout/min)')
             
         axs[i].set_yticks([])
-        axs[i].set_xticks([])
+        axs[i].set_xticks([0, 1440])
+        axs[i].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
         axs[i].set_xlabel(f'Well {i + 1}', fontsize=16)
 
         axs[i].annotate('', xy=(300, 1), xytext=(300, 1.025),
@@ -458,7 +462,8 @@ if sleepBoutBool:
          axs[i].set_ylabel('Sleep Bout (sleep bout/min)')
 
       axs[i].set_yticks([])
-      axs[i].set_xticks([])
+      axs[i].set_xticks([0, 1440])
+      axs[i].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
       axs[i].set_xlabel(f'Well {i + 1}', fontsize=16)
 
       axs[i].annotate('', xy=(300, 1), xytext=(300, 1.025),

@@ -5,22 +5,12 @@ Originally written in MATLAB by Louis Leung, Ph.D., this version was re-written 
 
 ---
 
-## 📂 Project Structure
+## 📂 Features
 
-This script provides:
 - Automated preprocessing and filtering of ViewPoint data
 - Interactive GUI input for customizable analysis
 - Generation of total activity, sleep, and sleep bout plots
 - Exported summary `.xlsx` files
-
----
-
-## 🧠 Developed By
-
-**Oliver Cho**  
-Mourrain Lab – Department of Psychiatry & Behavioral Sciences, Stanford University  
-📅 Date: June 2024  
-📧 Contact: [olivercho007@gmail.com](mailto:olivercho007@gmail.com)
 
 ---
 
